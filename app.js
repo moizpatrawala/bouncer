@@ -185,6 +185,17 @@ function load() {
   return blank();
 }
 let S = load();
+// Refund passes burned by a redirect loop: auto passes for the same app within 2 min of the previous one.
+(function refundLoops() {
+  const last = {};
+  let fixed = 0;
+  [...S.events].sort((x, y) => x.t - y.t).forEach(e => {
+    if (e.o !== 'in' || !e.auto) return;
+    if (last[e.app] && e.t - last[e.app] < 120000) { e.o = 'glitch'; fixed++; }
+    else last[e.app] = e.t;
+  });
+  if (fixed) { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (_) {} }
+})();
 function save() {
   const cut = now() - 60 * 864e5;
   S.events = S.events.filter(e => e.t > cut);
@@ -244,6 +255,25 @@ function openDoor(appId, test) {
 const AUTO_CHUNK = 15;
 function walkIn() {
   const { a } = D;
+  // Loop guard: let in under 2 minutes ago and back already? The Gate didn't see the pass. Don't burn another one.
+  const recent = S.events.find(e => e !== D.ev && e.app === a.id && e.o === 'in' && e.auto && now() - e.t < 120000);
+  if (recent && !D.test) {
+    Object.assign(D.ev, { o: 'glitch' }); save();
+    root.innerHTML = `
+    <main class="door">
+      <header class="door-top"><span class="mini-sign">Bouncer</span><span class="tag red">Setup glitch</span></header>
+      ${stageHTML('wag', `Hold up. I let you in ${ago(recent.t)} and the Gate sent you straight back. Your setup's broken, not you.`, { over: true })}
+      <p class="kicker">${esc(a.name)} · loop stopped</p>
+      <h1 class="door-h white">Glitch.</h1>
+      <p class="hint" style="text-align:left">Your pass is still running, so you can go in. To fix it, check the <b>${esc(a.name)}</b> automation runs <b>Bouncer Gate ${esc(a.name)}</b>, then run that shortcut once by hand and tap <b>Always Allow</b> on anything it asks.</p>
+      <div class="actions">
+        ${a.url === 'none' ? '' : `<a class="btn btn-in" href="${esc(a.url)}">Open ${esc(a.name)}</a>`}
+        <a class="btn ghost" href="${baseUrl()}#setup">Setup guide</a>
+      </div>
+    </main>`;
+    startStage();
+    return;
+  }
   const mins = Math.min(AUTO_CHUNK, leftMins(a.id));
   const leftAfter = leftMins(a.id) - mins;
   D.mins = mins;
@@ -739,23 +769,27 @@ function setupCard() {
     </ol>
   </details>
 
-  <details class="guide"><summary>1 · Install the two shortcuts</summary>
+  <details class="guide"><summary>1 · Install the shortcuts</summary>
     <ol>
-      <li>Tap <a class="linkish" href="shortcuts/Bouncer%20Pass.shortcut">Bouncer Pass</a> → <b>Add Shortcut</b>. It hands out passes and opens the app.</li>
-      <li>Tap <a class="linkish" href="shortcuts/Bouncer%20Gate.shortcut">Bouncer Gate</a> → <b>Add Shortcut</b>. It checks your pass and sends you to the door if you don't have one.</li>
-      <li>Already synced from your Mac through iCloud? Skip this step.</li>
+      <li><a class="linkish" href="shortcuts/Bouncer%20Pass.shortcut">Bouncer Pass</a>: hands out passes and opens the app.</li>
+      <li>One gate per app. Each checks your pass and sends you to the door if you don't have one:
+        <a class="linkish" href="shortcuts/Bouncer%20Gate%20Instagram.shortcut">Instagram</a> ·
+        <a class="linkish" href="shortcuts/Bouncer%20Gate%20YouTube.shortcut">YouTube</a> ·
+        <a class="linkish" href="shortcuts/Bouncer%20Gate%20TikTok.shortcut">TikTok</a> ·
+        <a class="linkish" href="shortcuts/Bouncer%20Gate%20Snapchat.shortcut">Snapchat</a> ·
+        <a class="linkish" href="shortcuts/Bouncer%20Gate%20Games.shortcut">Games</a></li>
+      <li>Tap each → <b>Add Shortcut</b>. Already synced from your Mac through iCloud? Skip this step.</li>
+      <li>Run each gate <b>once by hand</b> in Shortcuts and tap <b>Always Allow</b> on anything it asks. Automations can't ask for permission, so they fail silently.</li>
     </ol>
-    <p>The door sends the pass like <code>2026-11-25T14:30:00Z instagram instagram://</code>: valid until that time, for Instagram, then opens it.</p>
   </details>
 
   <details class="guide"><summary>2 · One automation per app</summary>
     <ol>
       <li>Shortcuts → <b>Automation</b> → <b>+</b> → <b>App</b> → choose <b>Instagram</b> → <b>Is Opened</b> → <b>Run Immediately</b> (turn off Notify When Run) → <b>Next</b>.</li>
-      <li>New blank automation → add one action: <b>Run Shortcut</b> → pick <b>Bouncer Gate</b>.</li>
-      <li>Tap the arrow on that action → <b>Input</b> → type <code>instagram</code>.</li>
-      <li>Repeat for YouTube (<code>youtube</code>), TikTok (<code>tiktok</code>), Snapchat (<code>snapchat</code>), and each game (<code>games</code>).</li>
+      <li>New blank automation → add one action: <b>Run Shortcut</b> → pick <b>Bouncer Gate Instagram</b>. Nothing else, no input.</li>
+      <li>Same for YouTube, TikTok and Snapchat with their own gate. Every game uses <b>Bouncer Gate Games</b>.</li>
     </ol>
-    <p>Got a pass running? The Gate lets you straight in. No pass? Straight to the door.</p>
+    <p>Got a pass running? The gate lets you straight in. No pass? Straight to the door. If you ever get bounced back within 2 minutes, the door stops the loop and says so.</p>
     <div class="urls">${urls}</div>
   </details>
 
