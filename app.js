@@ -209,7 +209,11 @@ function nopeStreak() {
   cur = run; return { cur, best };
 }
 function baseUrl() { return location.href.split(/[?#]/)[0].replace(/index\.html$/, ''); }
-function passLink(app, mins) { return `shortcuts://run-shortcut?name=${enc(S.settings.passShortcut)}&input=text&text=${enc(`${mins} ${app.id} ${app.url}`)}`; }
+// The pass shortcut gets "<expiry ISO time> <app id> <app url>" and just writes the expiry to bouncer-<app>.txt
+function passLink(app, mins) {
+  const until = new Date(now() + mins * 60000).toISOString().replace(/\.\d+Z$/, 'Z');
+  return `shortcuts://run-shortcut?name=${enc(S.settings.passShortcut)}&input=text&text=${enc(`${until} ${app.id} ${app.url}`)}`;
+}
 function lockLink(mins) { return `shortcuts://run-shortcut?name=${enc(S.settings.lockShortcut)}&input=text&text=${mins}`; }
 
 /* ======================================================================
@@ -735,36 +739,24 @@ function setupCard() {
     </ol>
   </details>
 
-  <details class="guide"><summary>1 · The “${P}” shortcut</summary>
+  <details class="guide"><summary>1 · Install the two shortcuts</summary>
     <ol>
-      <li>Shortcuts → <b>+</b> → name it exactly <code>${P}</code>.</li>
-      <li>Tap the <b>ⓘ</b> at the bottom, turn on <b>Use with Share Sheet</b> or <b>Receive input</b>, and set it to receive <b>Text</b>. This lets the door hand it the pass.</li>
-      <li>Add <b>Split Text</b>: split <i>Shortcut Input</i> by <b>Spaces</b>.</li>
-      <li>Add <b>Get Item from List</b> → <b>First Item</b>. Then <b>Set Variable</b> <code>Mins</code>.</li>
-      <li>Add <b>Get Item from List</b> (from Split Text) → <b>Item At Index 2</b>. Then <b>Set Variable</b> <code>App</code>.</li>
-      <li>Add <b>Get Item from List</b> (from Split Text) → <b>Last Item</b>. Then <b>Set Variable</b> <code>Link</code>.</li>
-      <li>Add <b>Adjust Date</b>: <b>Add</b> <code>Mins</code> <b>minutes</b> to <b>Current Date</b>.</li>
-      <li>Add <b>Format Date</b>: Adjusted Date, format <b>ISO 8601</b>.</li>
-      <li>Add <b>Save File</b>: save Formatted Date, turn <b>Ask Where to Save</b> off, folder <b>Shortcuts</b>, subpath <code>bouncer-</code><i>App</i><code>.txt</code>, <b>Overwrite If File Exists</b> on.</li>
-      <li>Add <b>If</b> <code>Link</code> <b>is not</b> <code>none</code> → inside it <b>Open URLs</b> <code>Link</code>.</li>
+      <li>Tap <a class="linkish" href="shortcuts/Bouncer%20Pass.shortcut">Bouncer Pass</a> → <b>Add Shortcut</b>. It hands out passes and opens the app.</li>
+      <li>Tap <a class="linkish" href="shortcuts/Bouncer%20Gate.shortcut">Bouncer Gate</a> → <b>Add Shortcut</b>. It checks your pass and sends you to the door if you don't have one.</li>
+      <li>Already synced from your Mac through iCloud? Skip this step.</li>
     </ol>
-    <p>The door sends something like <code>10 instagram instagram://</code>: a 10-minute pass for Instagram, then open it.</p>
+    <p>The door sends the pass like <code>2026-11-25T14:30:00Z instagram instagram://</code>: valid until that time, for Instagram, then opens it.</p>
   </details>
 
   <details class="guide"><summary>2 · One automation per app</summary>
     <ol>
-      <li>Shortcuts → <b>Automation</b> → <b>+</b> → <b>App</b> → choose <b>Instagram</b> → <b>Is Opened</b> → <b>Run Immediately</b> (turn off Notify When Run).</li>
-      <li>New blank shortcut, add:
-        <ol>
-          <li><b>Get File from Folder</b>: folder <b>Shortcuts</b>, path <code>bouncer-instagram.txt</code>, <b>Error If Not Found</b> off.</li>
-          <li><b>Get Dates from Input</b> (the File).</li>
-          <li><b>If</b> Dates <b>is after</b> <b>Current Date</b> → <b>Stop This Shortcut</b>. End If.</li>
-          <li><b>Open URLs</b>: the Instagram door link below.</li>
-        </ol></li>
-      <li>Repeat for YouTube, TikTok, Snapchat and each game. Swap the file name to <code>bouncer-youtube.txt</code> etc. and use that app's link. Every game uses <code>games</code>.</li>
+      <li>Shortcuts → <b>Automation</b> → <b>+</b> → <b>App</b> → choose <b>Instagram</b> → <b>Is Opened</b> → <b>Run Immediately</b> (turn off Notify When Run) → <b>Next</b>.</li>
+      <li>New blank automation → add one action: <b>Run Shortcut</b> → pick <b>Bouncer Gate</b>.</li>
+      <li>Tap the arrow on that action → <b>Input</b> → type <code>instagram</code>.</li>
+      <li>Repeat for YouTube (<code>youtube</code>), TikTok (<code>tiktok</code>), Snapchat (<code>snapchat</code>), and each game (<code>games</code>).</li>
     </ol>
+    <p>Got a pass running? The Gate lets you straight in. No pass? Straight to the door.</p>
     <div class="urls">${urls}</div>
-    <p>Your pass active? The automation lets you straight in. No pass? Straight to the door.</p>
   </details>
 
   <details class="guide"><summary>3 · The Lockdown Focus</summary>
